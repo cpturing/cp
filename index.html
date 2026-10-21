@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f7f4">
+  <title>今日待办</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f7f4; color: #23382e; font-family: system-ui, -apple-system, "Microsoft YaHei", sans-serif; }
+    main { max-width: 620px; margin: 10vh auto; padding: 24px; }
+    .eyebrow { color: #5c7768; font-size: 13px; letter-spacing: 3px; }
+    h1 { font-size: 36px; margin: 12px 0; letter-spacing: -1px; }
+    .intro { color: #68786e; line-height: 1.7; margin-bottom: 30px; }
+    .card { background: white; border: 1px solid #e1e8df; border-radius: 24px; padding: 24px; box-shadow: 0 12px 40px #23382e06; }
+    form { display: flex; gap: 10px; }
+    input[type="text"] { min-width: 0; flex: 1; border: 1px solid #d9e2d8; border-radius: 12px; padding: 14px; font: inherit; background: #fafbf9; }
+    button { cursor: pointer; font: inherit; border: 0; border-radius: 12px; min-height: 44px; }
+    .add { background: #315d47; color: white; padding: 0 20px; white-space: nowrap; }
+    button:hover { filter: brightness(.94); }
+    :focus-visible { outline: 3px solid #8caf82; outline-offset: 3px; }
+    .summary { font-size: 13px; color: #68786e; margin: 24px 0 10px; }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #edf0eb; padding: 12px 0; }
+    li:last-child { border-bottom: 0; }
+    input[type="checkbox"] { width: 22px; height: 22px; margin: 0; accent-color: #315d47; cursor: pointer; flex-shrink: 0; }
+    label { flex: 1; padding: 10px 0; overflow-wrap: anywhere; cursor: pointer; line-height: 1.5; }
+    .done label { text-decoration: line-through; color: #8a968d; }
+    .delete { background: transparent; color: #8c5858; padding: 0 10px; flex-shrink: 0; font-size: 13px; }
+    .empty { text-align: center; padding: 34px 8px; color: #778579; line-height: 1.8; }
+    .empty span { display: block; font-size: 30px; margin-bottom: 8px; }
+    footer { text-align: center; color: #79867d; font-size: 12px; line-height: 1.8; margin-top: 22px; }
+    #message { color: #a13c32; font-size: 13px; line-height: 1.6; }
+    #message:empty { display: none; }
+    @media (max-width: 480px) { main { margin: 32px auto; padding: 20px; } .card { padding: 18px; } h1 { font-size: 32px; } .add { padding: 0 16px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">留一点时间，给重要的事</div>
+    <h1>今日待办<span style="color:#83a578">。</span></h1>
+    <p class="intro">把想做的事记下来，一件一件慢慢完成。</p>
+    <section class="card" aria-label="任务清单">
+      <form id="task-form">
+        <input id="task-input" type="text" maxlength="200" placeholder="接下来想做什么？" aria-label="新任务" autocomplete="off" required>
+        <button class="add" type="submit">添加</button>
+      </form>
+      <p id="message" role="alert"></p>
+      <p id="summary" class="summary" role="status"></p>
+      <ul id="tasks" aria-label="待办任务"></ul>
+      <div id="empty" class="empty"><span aria-hidden="true">☀</span>清单空空，心里轻轻。<br>添加第一件想做的事吧。</div>
+    </section>
+    <footer>记录保存在当前浏览器中，刷新也不会丢失。<br>清除浏览器数据会移除记录，请勿用它保存重要资料。</footer>
+  </main>
+  <script>
+    const STORAGE_KEY = 'cp-todos-v1';
+    const input = document.getElementById('task-input');
+    const list = document.getElementById('tasks');
+    const message = document.getElementById('message');
+    let tasks = [];
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+      if (!Array.isArray(saved) || !saved.every(t => t && typeof t.id === 'string' && typeof t.text === 'string' && typeof t.done === 'boolean')) throw new Error('Invalid data');
+      tasks = saved;
+    } catch {
+      message.textContent = '无法读取本地记录。你仍可使用清单，但请检查浏览器存储设置。';
+    }
+    function save() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+        message.textContent = '';
+      } catch {
+        message.textContent = '保存失败：当前更改仅在本页有效，刷新可能丢失。请检查浏览器存储空间或权限。';
+      }
+    }
+    function render() {
+      list.replaceChildren();
+      for (const task of tasks) {
+        const row = document.createElement('li');
+        row.classList.toggle('done', task.done);
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = 'task-' + task.id;
+        checkbox.checked = task.done;
+        checkbox.addEventListener('change', () => {
+          task.done = checkbox.checked;
+          save();
+          row.classList.toggle('done', task.done);
+          updateSummary();
+        });
+        const label = document.createElement('label');
+        label.htmlFor = checkbox.id;
+        label.textContent = task.text;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'delete';
+        remove.textContent = '删除';
+        remove.setAttribute('aria-label', '删除任务：' + task.text);
+        remove.addEventListener('click', () => {
+          tasks = tasks.filter(t => t !== task);
+          save();
+          render();
+          input.focus();
+        });
+        row.append(checkbox, label, remove);
+        list.append(row);
+      }
+      updateSummary();
+    }
+    function updateSummary() {
+      const done = tasks.filter(t => t.done).length;
+      document.getElementById('summary').textContent = `${tasks.length - done} 项待完成 · ${done} 项已完成`;
+      document.getElementById('empty').hidden = tasks.length > 0;
+    }
+    document.getElementById('task-form').addEventListener('submit', event => {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text) { input.value = ''; input.focus(); return; }
+      tasks.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2), text, done: false });
+      save();
+      render();
+      input.value = '';
+      input.focus();
+    });
+    render();
+  </script>
+</body>
+</html>
